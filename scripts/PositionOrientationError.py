@@ -15,6 +15,7 @@ from transforms3d.euler import quat2euler
 
 #message type for Vicon truth pose data, and the rovio estimated pose
 from geometry_msgs.msg import TransformStamped
+from nav_msgs.msg import Odometry
 
 #paths to the bagfiles to analyze
 EASY_RECORD_FILE = '/home/mknowles/bagfiles/euroc/easy_record.bag'
@@ -61,6 +62,9 @@ class syncedPose(object):
 
 	def getEstEulerAngles(self):
 		return quat2euler((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
+
+	def getSyncedTime(self):
+		return self.syncedTime
 
 	def getEstRotationMatrix(self):
 		return quat2mat((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
@@ -137,7 +141,7 @@ def getPositionAndRotationArrays(syncedPoses):
 	#now go through every synced pose and extract the right information
 	counter = 0
 	for i in syncedPoses:
-		times.append(i.syncedTime)
+		times.append(i.getSyncedTime())
 
 		xt, yt, zt = i.getTruthXYZ()
 		xe, ye, ze = i.getEstXYZ()
@@ -153,9 +157,6 @@ def getPositionAndRotationArrays(syncedPoses):
 		truth_y.append(yt)
 		truth_z.append(zt)
 
-		#signs between IMU and truth x,y are flipped!
-		xe*=-1
-		ye*=-1
 
 		#if this is the first synced pose, use it to calculate position offsets
 		if counter==0:
@@ -163,12 +164,13 @@ def getPositionAndRotationArrays(syncedPoses):
 			y_offset = yt-ye
 			z_offset = zt-ze
 			counter += 1
+			print("Offsets:", x_offset, y_offset, z_offset)
 			print("Initial Truth Eulers:", roll_t, pitch_t, yaw_t)
 			print("Initial Est. Eulers:", roll_est, pitch_est, yaw_est)
 
 		#add the estimated coordinates to their respective arrays
-		est_x.append(xe+x_offset)
-		est_y.append(ye+y_offset)
+		est_x.append(-1*xe+x_offset)
+		est_y.append(ye) #need to multiply x and y by -1 because TF conventions are different for IMU and Vicon
 		est_z.append(ze+z_offset)
 		est_roll.append(roll_est)
 		est_pitch.append(pitch_est)
@@ -185,24 +187,29 @@ def plotEstimationVSTruth(syncedPoses, x=True,y=True,z=True,roll=True,pitch=True
 	"""
 	xe, ye, ze, re, pe, ye, xt, yt, zt, rt, pt, yt, times = getPositionAndRotationArrays(syncedPoses)
 	print len(xe)
+	assert(len(ye)==len(times))
 
 	if x:
 		#Plot 1: X vs. truth
 		plt.figure(1) #create the first plot
+		plt.title("X vs. Truth")
 		plt.subplot(211)
-		plt.plot(times, xe, 'ro')
+		plt.plot(times, xe,'r', times, xt, 'y')
 
 	if y:
 		#Plot 2: Y vs. truth
+		print(ye)
 		plt.figure(2)
+		plt.title("Y vs. Truth")
 		plt.subplot(211)
-		plt.plot(times, ye, 'bo')
+		plt.plot(times, ye,'g', times, yt,'y')
 
 	if z:
 		#Plot 2: Y vs. truth
 		plt.figure(3)
+		plt.title("Z vs. Truth")
 		plt.subplot(211)
-		plt.plot(times, ze, 'go')
+		plt.plot(times, ze,'b', times, zt,'y')
 
 	if roll:
 		pass
@@ -221,7 +228,7 @@ def plotEstimationError(x_error=True,y_error=True,z_error=True,roll_error=True,p
 
 def main():
 	#get a chronological list of synced poses from the bag
-	syncedPoses = buildSyncedPoseList(DIFFICULT_RECORD_FILE, 100000000, truth_tf, est_tf)
+	syncedPoses = buildSyncedPoseList(EASY_RECORD_FILE, 100000000, truth_tf, est_tf)
 	print("Created", len(syncedPoses), "synced poses")
 
 	#display the right plots
