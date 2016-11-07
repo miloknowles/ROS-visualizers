@@ -143,7 +143,10 @@ catkin_package(
 ## in contrast to setup.py, you can choose the destination
 
 install(PROGRAMS
-   scripts/myviz.py
+   #scripts/myviz.py
+   #scripts/pose_truth.py
+   scripts/3DPoseViz.py
+   scripts/PositionOrientationError.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 ## Mark executables and/or libraries for installation
