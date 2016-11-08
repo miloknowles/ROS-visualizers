@@ -40,17 +40,26 @@
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+
   <build_depend>rviz</build_depend>
   <build_depend>rosbag</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>numpy</build_depend>
+  <build_depend>math</build_depend>
   <build_depend>matplotlib</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>transforms3d</build_depend>
   <build_depend>pylab</build_depend>
 
   <run_depend>rosbag</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>rviz</run_depend>
   <run_depend>numpy</run_depend>
+  <run_depend>nav_msgs</run_depend>
+  <run_depend>math</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>transforms3d</run_depend>
   <run_depend>matplotlib</run_depend>
   <run_depend>pylab</run_depend>
   
