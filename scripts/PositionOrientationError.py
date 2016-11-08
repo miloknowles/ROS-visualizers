@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+Plots the X, Y, Z, Roll, Pitch, and Yaw estimations vs. Truth along with their estimation error over time.
+"""
+
+
+
 import rosbag
 import roslib
 import rospy
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pylab as p
-from mpl_toolkits.mplot3d import Axes3D
 import math
 import numpy as np
 from transforms3d.quaternions import rotate_vector, quat2mat
@@ -309,7 +314,7 @@ def plotEstimationVSTruth(syncedPoses, x=0,y=0,z=0,roll=True,pitch=True,yaw=True
 
 
 
-	
+
 
 def main():
 	#get a chronological list of synced poses from the bag
