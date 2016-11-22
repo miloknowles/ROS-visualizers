@@ -15,15 +15,6 @@ import numpy as np
 #message type for Vicon truth pose data, and the rovio estimated pose
 from geometry_msgs.msg import TransformStamped
 
-#paths to the bagfiles to analyze
-EASY_RECORD_FILE = '/home/mknowles/bagfiles/euroc/easy_record.bag'
-MEDIUM_RECORD_FILE = '/home/mknowles/bagfiles/euroc/medium_record.bag'
-DIFFICULT_RECORD_FILE = '/home/mknowles/bagfiles/euroc/difficult_record.bag'
-
-#these are the topics that contain estimated pose and truth pose
-truth_tf = '/vicon/firefly_sbx/firefly_sbx'
-est_tf = '/rovio/transform'
-TOPICS = [truth_tf, est_tf]
 
 def areSynchronized(msg1, msg2, epsilon):
 	"""
@@ -31,8 +22,8 @@ def areSynchronized(msg1, msg2, epsilon):
 	Return True if two timestamps are within an epsilon of each other
 	If two timestamps are within epsilon, they are close enough to be consider simultaneous.
 	"""
-	t1 = float(msg1.header.stamp.secs) + float(msg1.header.stamp.nsecs) / 1000000000
-	t2 = float(msg2.header.stamp.secs) + float(msg2.header.stamp.nsecs) / 1000000000
+	t1 = float(msg1.header.stamp.secs) + float(msg1.header.stamp.nsecs) / 1e9
+	t2 = float(msg2.header.stamp.secs) + float(msg2.header.stamp.nsecs) / 1e9
 	delta = abs(t2-t1)
 	if delta < epsilon:
 		return True
@@ -44,8 +35,8 @@ class syncedPose(object):
 	def __init__(self, truthTFMsg, estTFMsg):
 		self.truthTFMsg = truthTFMsg
 		self.estTFMsg = estTFMsg
-		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1000000000
-		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1000000000
+		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1e9
+		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1e9
 		self.syncedTime = (self.truthTime + self.estTime) / 2
 
 	def getTruthXYZ(self):
@@ -64,7 +55,7 @@ class syncedPose(object):
 		return quat2mat((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
 
 
-def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
+def buildSyncedPoseList(bagfile, epsilon, truth_topic, est_topic):
 	"""
 	Bagfile: the full path to the .bag file that contains truth/est transforms
 	epsilon: the value (nanosecs) that two msg stamps must be within to be considered simultaneous
@@ -78,8 +69,8 @@ def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
 	syncedPoses = []
 
 	#topic, message data object, time
-	for topic, msg, t in bag.read_messages(topics=[truth_tf, est_tf]):
-		
+	for topic, msg, t in bag.read_messages(topics=[truth_topic, est_topic]):
+
 		#see if we're already holding a msg to find a match
 		if holdMsg == None:
 			holdMsg = msg
@@ -90,10 +81,9 @@ def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
 
 			#check if the matching msg we just found is within epsilon nanosecs of our hold topic
 			if areSynchronized(holdMsg, msg, epsilon):
-
 				#check whether the holdTopic is truth or estimated
 				# add the syncedPose object to a chronological list
-				if holdTopic == truth_tf:
+				if holdTopic == truth_topic:
 					syncedPoses.append(syncedPose(holdMsg, msg))
 				else:
 					syncedPoses.append(syncedPose(msg, holdMsg))
@@ -140,10 +130,27 @@ def offsetRotation(rot_mat, point):
 	return (new_pt[0][0], new_pt[1][0], new_pt[2][0])
 
 
+# BAGFILES TO ANALYZE #
+# 1. euroc dataset (provided by ethz-asl)
+EASY_RECORD_FILE = '/home/mknowles/bagfiles/euroc/easy_record.bag'
+MEDIUM_RECORD_FILE = '/home/mknowles/bagfiles/euroc/medium_record.bag'
+DIFFICULT_RECORD_FILE = '/home/mknowles/bagfiles/euroc/difficult_record.bag'
+# 2. Kyel's STAR dataset
+STAR0 = '/home/mknowles/bagfiles/star/star0_rovio.bag'
+STAR1 = '/home/mknowles/bagfiles/star/star1_rovio.bag'
+STAR2 = '/home/mknowles/bagfiles/star/star2_rovio.bag'
+# END BAGFILE DEFS #
+
 def main():
+
+	#SETUP
+	BAGFILE = STAR0 #the full path to the bagfile
+	TRUTH_TF = '/vicon/tf' #the name of the truth transform topic
+	EST_TF = '/rovio/transform' # the name of the estimated transform (odometry for rovio) topic
+
 	#get a chronological list of synced poses from the bag
-	syncedPoses = buildSyncedPoseList(DIFFICULT_RECORD_FILE, 100000000, truth_tf, est_tf)
-	print len(syncedPoses)
+	syncedPoses = buildSyncedPoseList(BAGFILE, 1e8, TRUTH_TF, EST_TF)
+	print("Plotting", len(syncedPoses), "synchronized poses.")
 
 	#create an MPL figure
 	fig = plt.figure()
@@ -174,8 +181,8 @@ def main():
 		truth_y.append(yt)
 		truth_z.append(zt)
 		#signs between IMU and truth x,y are flipped!
-		xe*=-1
-		ye*=-1
+		# xe*=-1
+		# ye*=-1
 
 		if counter==0:
 			x_offset = xt-xe
@@ -190,14 +197,14 @@ def main():
 			print("Est. Eulers:", est_eulers)
 
 		translated_xyz = (xe+x_offset, ye+y_offset, ze+z_offset)
-		rotated_xyz = offsetRotation(callibrationRotMat, translated_xyz)
-		print "Rotated", rotated_xyz
+		# rotated_xyz = offsetRotation(callibrationRotMat, translated_xyz)
+		# print "Rotated", rotated_xyz
 
-		est_x.append(rotated_xyz[0])
-		est_y.append(rotated_xyz[1])
-		est_z.append(rotated_xyz[2])
+		est_x.append(translated_xyz[0])
+		est_y.append(translated_xyz[1])
+		est_z.append(translated_xyz[2])
 
-	#format the plot
+	#format the plot: truth is RED, estimated is GREEN
 	ax.set_xlabel('X')
 	ax.set_ylabel('Y')
 	ax.set_zlabel('Z')
