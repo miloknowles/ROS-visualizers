@@ -5,8 +5,6 @@
 Plots the X, Y, Z, Roll, Pitch, and Yaw estimations vs. Truth along with their estimation error over time.
 """
 
-
-
 import rosbag
 import roslib
 import rospy
@@ -39,8 +37,8 @@ def areSynchronized(msg1, msg2, epsilon):
 	Return True if two timestamps are within an epsilon of each other
 	If two timestamps are within epsilon, they are close enough to be consider simultaneous.
 	"""
-	t1 = float(msg1.header.stamp.secs) + float(msg1.header.stamp.nsecs) / 1000000000
-	t2 = float(msg2.header.stamp.secs) + float(msg2.header.stamp.nsecs) / 1000000000
+	t1 = float(msg1.header.stamp.secs) + float(msg1.header.stamp.nsecs) / 1e9
+	t2 = float(msg2.header.stamp.secs) + float(msg2.header.stamp.nsecs) / 1e9
 	delta = abs(t2-t1)
 	if delta < epsilon:
 		return True
@@ -52,8 +50,8 @@ class syncedPose(object):
 	def __init__(self, truthTFMsg, estTFMsg):
 		self.truthTFMsg = truthTFMsg
 		self.estTFMsg = estTFMsg
-		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1000000000
-		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1000000000
+		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1e9
+		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1e9
 		self.syncedTime = (self.truthTime + self.estTime) / 2
 
 	def getTruthXYZ(self):
@@ -230,7 +228,7 @@ def getPositionAndRotationArrays(syncedPoses, xReverse=False, yReverse=False, zR
 	return (est_x, est_y, est_z, est_roll, est_pitch, est_yaw, truth_x, truth_y, truth_z, truth_roll, truth_pitch, truth_yaw, times)
 
 
-def plotEstimationVSTruth(syncedPoses, x=0,y=0,z=0,roll=True,pitch=True,yaw=True):
+def plotEstimationVSTruth(syncedPoses, x=1,y=1,z=1,roll=True,pitch=True,yaw=True):
 	"""
 	Plots each coordinate vs. truth over time.
 	Changing the parameter flags will determine which plots are shown.
@@ -247,79 +245,112 @@ def plotEstimationVSTruth(syncedPoses, x=0,y=0,z=0,roll=True,pitch=True,yaw=True
 
 	if x:
 		#Plot 1: X vs. truth
-		plt.figure(1) #create the first plot
-		plt.title("X vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, xe,'r', times, xt, 'y')
+		fig1 = plt.figure(1) #create the first plot
+		fig1.suptitle("X Position vs. Truth",fontsize=14, fontweight='bold')
+		
+		ax1 = fig1.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('position (m)')
+		ax1.plot(times, xe,'r',label='estimated')
+		ax1.plot(times, xt, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig1.add_subplot(212)
+		ax2.set_ylabel('error (m)')
 		x_err = [xe[i]-xt[i] for i in range(len(xe))]
-		plt.plot(times,x_err,'m')
+		ax2.plot(times,x_err,'m')
 
 	if y:
-		#Plot 2: Y vs. truth
-		#print(ye)
-		plt.figure(2)
-		plt.title("Y vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, ye,'g', times, yt,'y')
+		fig2 = plt.figure(2) #create the first plot
+		fig2.suptitle("Y Position vs. Truth",fontsize=14, fontweight='bold')
+		
+		ax1 = fig2.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('position (m)')
+		ax1.plot(times, ye,'r',label='estimated')
+		ax1.plot(times, yt, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig2.add_subplot(212)
+		ax2.set_ylabel('error (m)')
 		y_err = [ye[i]-yt[i] for i in range(len(ye))]
-		plt.plot(times,y_err,'m')
+		ax2.plot(times,y_err,'m')
 
 	if z:
-		#Plot 2: Y vs. truth
-		plt.figure(3)
-		plt.title("Z vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, ze,'b', times, zt,'y')
+		fig3 = plt.figure(3) #create the first plot
+		fig3.suptitle("Z Position vs. Truth",fontsize=14, fontweight='bold')
+		
+		ax1 = fig3.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('position (m)')
+		ax1.plot(times, ze,'r',label='estimated')
+		ax1.plot(times, zt, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig3.add_subplot(212)
+		ax2.set_ylabel('error (m)')
 		z_err = [ze[i]-zt[i] for i in range(len(ze))]
-		plt.plot(times,z_err,'m')
+		ax2.plot(times,z_err,'m')
 
 	if roll:
-		plt.figure(4)
-		plt.title("Roll vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, roll_e, 'r', times, roll_t, 'y')
+		fig4 = plt.figure(4) #create the first plot
+		fig4.suptitle("Roll Angle vs. Truth",fontsize=14, fontweight='bold')
+		
+		ax1 = fig4.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('roll angle (deg)')
+		ax1.plot(times, roll_e,'r',label='estimated')
+		ax1.plot(times, roll_t, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig4.add_subplot(212)
+		ax2.set_ylabel('error (deg)')
 		roll_err = [roll_e[i]-roll_t[i] for i in range(len(roll_e))]
-		plt.plot(times,roll_err,'m')
+		ax2.plot(times,roll_err,'m')
 
 	if pitch:
-		plt.figure(5)
-		plt.title("Pitch vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, pitch_e, 'g', times, pitch_t, 'y')
+		fig5 = plt.figure(5) #create the first plot
+		fig5.suptitle("Pitch Angle vs. Truth",fontsize=15, fontweight='bold')
+		
+		ax1 = fig5.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('pitch angle (deg)')
+		ax1.plot(times, pitch_e,'r',label='estimated')
+		ax1.plot(times, pitch_t, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig5.add_subplot(212)
+		ax2.set_ylabel('error (deg)')
 		pitch_err = [pitch_e[i]-pitch_t[i] for i in range(len(pitch_e))]
-		plt.plot(times,pitch_err,'m')
+		ax2.plot(times,pitch_err,'m')
 
 	if yaw:
-		plt.figure(6)
-		plt.title("Yaw vs. Truth")
-		plt.subplot(211)
-		plt.plot(times, yaw_e, 'b', times, yaw_t, 'y')
+		fig6 = plt.figure(6) #create the first plot
+		fig6.suptitle("Yaw Angle vs. Truth",fontsize=16, fontweight='bold')
+		
+		ax1 = fig6.add_subplot(211)
+		ax1.set_xlabel('time (sec)')
+		ax1.set_ylabel('yaw angle (deg)')
+		ax1.plot(times, yaw_e,'r',label='estimated')
+		ax1.plot(times, yaw_t, 'y', label='truth')
+		ax1.legend(loc='best')
 
-		plt.subplot(212)
+		ax2 = fig6.add_subplot(212)
+		ax2.set_ylabel('error (deg)')
 		yaw_err = [yaw_e[i]-yaw_t[i] for i in range(len(yaw_e))]
-		plt.plot(times,yaw_err,'m')
+		ax2.plot(times,yaw_err,'m')
 
 	plt.show()
 
 
-
-
-
-
 def main():
+	BAGFILE = '/home/mknowles/bagfiles/star/star0_rovio.bag'
+	TRUTH_TF = '/vicon/tf'
+	EST_TF = '/rovio/transform'
+
 	#get a chronological list of synced poses from the bag
-	syncedPoses = buildSyncedPoseList(EASY_RECORD_FILE, 10000000, truth_tf, est_tf)
-	print("Created", len(syncedPoses), "synced poses")
+	syncedPoses = buildSyncedPoseList(BAGFILE, 1e7, TRUTH_TF, EST_TF)
+	print("Created", len(syncedPoses), "synced poses.")
 
 	#display the right plots
 	plotEstimationVSTruth(syncedPoses)
