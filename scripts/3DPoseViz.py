@@ -144,7 +144,7 @@ STAR2 = '/home/mknowles/bagfiles/star/star2_rovio.bag'
 def main():
 
 	#SETUP
-	BAGFILE = STAR0 #the full path to the bagfile
+	BAGFILE = STAR1 #the full path to the bagfile
 	TRUTH_TF = '/vicon/tf' #the name of the truth transform topic
 	EST_TF = '/rovio/transform' # the name of the estimated transform (odometry for rovio) topic
 
