@@ -68,19 +68,6 @@ class syncedPose(object):
 	def getTruthTF(self):
 		return self.truthTFMsg
 
-	def transformPose(self, tf_ros, truth_frame_name, world_frame_name, tf_time):
-		"""
-		tf_ros: a TransformerROS object with the the necessary frames set up 
-		This function transforms the quad's pose to the world frame, and then to the vicon frame
-		"""
-		pose = PoseStamped()
-		pose.header = self.estTFMsg.header
-		pose.header.stamp = tf_time
-		pose.pose = self.estTFMsg.pose.pose
-		pose = tf_ros.transformPose(world_frame_name, pose)
-		pose = tf_ros.transformPose(truth_frame_name, pose)
-		return pose # returns the pose part of of the msg
-
 	def getTruthQuat(self):
 		return (self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z)
 	def getEstQuat(self):
@@ -93,10 +80,6 @@ class syncedPose(object):
 		return [math.degrees(i) for i in quat2euler((self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z))]
 	def getEstEulerAngles(self):
 		return [math.degrees(i) for i in quat2euler((self.estTFMsg.pose.pose.orientation.w, self.estTFMsg.pose.pose.orientation.x, self.estTFMsg.pose.pose.orientation.y, self.estTFMsg.pose.pose.orientation.z))]
-
-	# def getEstRotationMatrix(self):
-	# 	return quat2mat((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
-
 
 def buildSyncedPoseList(bagfile, epsilon, truth_topic, est_topic, pose_topic):
 	"""
@@ -143,36 +126,6 @@ def buildSyncedPoseList(bagfile, epsilon, truth_topic, est_topic, pose_topic):
 
 	return syncedPoses
 
-def rotatePoint(originPoint, point, theta):
-	"""
-	Calculates the radius of the current point (distance between originPoint and point)
-	theta: the angle between the point's coordinate system and the desired coordinate system
-	originPoint: the (x0,y0,z0) point to rotate our (x,y,z) point around
-	point: the (x,y,z) point that we want to put into our new coordinate system
-	"""
-	squareSum = 0
-
-	#get radial distance in the xy plane
-	for i in range(2):
-		squareSum += (point[i] - originPoint[i]) ** 2
-	xy_rad = math.sqrt(squareSum)
-	new_x = xy_rad * math.sin(theta)
-	new_y = xy_rad * math.cos(theta)
-
-	return (new_x, new_y, point[2])
-
-
-def offsetRotation(rot_mat, point):
-	"""
-	Applies the given rot_mat to an xyz point.
-	"""
-	pt = np.array(point)
-	mat1 = np.mat(pt)
-	mat2 = np.mat(rot_mat)
-	new_pt = np.array(np.dot(rot_mat, np.transpose(mat1)))
-	#print("Pt:", pt, "New pt:", new_pt)
-	return (new_pt[0][0], new_pt[1][0], new_pt[2][0])
-
 
 # BAGFILES TO ANALYZE #
 # 1. euroc dataset (provided by ethz-asl)
@@ -190,10 +143,6 @@ VICON_FRAME_NAME = 'vicon/firefly_sbx/firefly_sbx'
 QUAD_FRAME_NAME = 'imu'
 
 def main():
-
-	#make a TransformerROS object (handles transforms operations)
-	t = tf.TransformerROS(True, rospy.Duration(10))
-
 	#SETUP
 	BAGFILE = STAR1 #the full path to the bagfile
 	TRUTH_TF = '/vicon/tf' #the name of the truth transform topic
@@ -232,53 +181,38 @@ def main():
 		# roll_t, pitch_t, yaw_t = i.getTruthEulerAngles()
 		# roll_e, pitch_e, yaw_e = i.getEstEulerAngles()
 
-		if counter<5:
-			# #calculate relative quaternion
+		if counter<1:
+			# calculate relative quaternion
 			# quat_rel = qmult(qinverse(np.array(i.getEstQuat())), np.array(i.getTruthQuat()))
 			# quat_est_offset = qmult(qinverse(np.array(i.getEstQuat())), np.array([1,0,0,0]))
 			# quat_truth_offset = qmult(qinverse(np.array(i.getTruthQuat())), np.array([1,0,0,0]))
 			# rel_rot_mat = quat2mat(quat_rel)
-			x_est_offset = 0-xe
-			y_est_offset = 0-ye
-			z_est_offset = 0-ze
+
+			# NOTE: Rovio starts at (x0,y0,z0) = (0,0,0)
+			# determine how to translate the Vicon to (0,0,0) in the Rovio frame
 			x_truth_offset = 0-xt
 			y_truth_offset = 0-yt
 			z_truth_offset = 0-zt
 			counter += 1
+			i.pp()
 
-			#determine rotation matrix to apply
+			#Rovio's quaternion should be the identity, but is not
+			# so I find the rotation matrices that transform Rovio to the vicon frame (vicon has the identity quaternion)
 			est_rot_mat = quat2mat(i.getEstQuat())
-			truth_rot_mat = quat2mat(i.getTruthQuat())
 
-		#first translate by some offset, then rotate into the truth coordinate frame
-		translated_xyz_est = np.array([xe+x_est_offset, ye+y_est_offset, ze+z_est_offset])
+		#translate the Vicon truth so that it begins at (0,0,0) in the Rovio frame
 		translated_xyz_truth = np.array([xt+x_truth_offset, yt+y_truth_offset, zt+z_truth_offset])
-		# rotated_xyz_truth = rotate_vector(translated_xyz_truth, quat_truth_offset)
-		# rotated_xyz_est = rotate_vector(translated_xyz_est, quat_est_offset)
-		# rel_rotated_xyz_est = rotate_vector(translated_xyz_est, quat_rel)
+		xyz_est = np.array([xe,ye,ze])
 
-		rot_est = np.dot(est_rot_mat, translated_xyz_est)
-		rot_truth = np.dot(truth_rot_mat, translated_xyz_truth)
-		est_x.append(-rot_est[0])
+		# apply the rotation matrix for the estimates to the translated points
+		rot_est = np.dot(est_rot_mat, xyz_est)
+
+		est_x.append(-rot_est[0]) # sign change to deal with rovio vs. vicon frame conventions
 		est_y.append(rot_est[1])
 		est_z.append(-rot_est[2])
-		truth_x.append(rot_truth[0])
-		truth_y.append(rot_truth[1])
-		truth_z.append(rot_truth[2])
-
-		# est_x.append(-rotated_xyz_est[0])
-		# est_y.append(rotated_xyz_est[1])
-		# est_z.append(-rotated_xyz_est[2])
-		# truth_x.append(rotated_xyz_truth[0])
-		# truth_y.append(rotated_xyz_truth[1])
-		# truth_z.append(rotated_xyz_truth[2])
-
-		# est_x.append(translated_xyz_est[0])
-		# est_y.append(translated_xyz_est[1])
-		# est_z.append(translated_xyz_est[2])
-		# truth_x.append(translated_xyz_truth[0])
-		# truth_y.append(translated_xyz_truth[1])
-		# truth_z.append(translated_xyz_truth[2])
+		truth_x.append(translated_xyz_truth[0])
+		truth_y.append(translated_xyz_truth[1])
+		truth_z.append(translated_xyz_truth[2])
 
 
 	#format the plot: truth is RED, estimated is GREEN
@@ -287,6 +221,10 @@ def main():
 	ax.set_zlabel('Z')
 	ax.set_title('Estimated Pose vs. Truth (meters)')
 	fig.add_axes(ax)
+	# print "TX:", np.shape(truth_x)
+	# print "TY:", np.shape(truth_y)
+	# print "EX:", np.shape(est_x)
+	# print "EY:",
 	ax.plot(truth_x, truth_y, zs=truth_z, zdir='z', color="r")
 	ax.plot(est_x, est_y, zs=est_z, zdir='z', color="g")
 	p.show()
