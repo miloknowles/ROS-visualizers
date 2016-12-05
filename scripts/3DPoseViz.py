@@ -232,22 +232,19 @@ def main():
 		# roll_t, pitch_t, yaw_t = i.getTruthEulerAngles()
 		# roll_e, pitch_e, yaw_e = i.getEstEulerAngles()
 
-		if counter<1:
-			#calculate relative quaternion
-			quat_rel = qmult(qinverse(np.array(i.getEstQuat())), np.array(i.getTruthQuat()))
-			rel_rot_mat = quat2mat(quat_rel)
+		if counter<5:
+			# #calculate relative quaternion
+			# quat_rel = qmult(qinverse(np.array(i.getEstQuat())), np.array(i.getTruthQuat()))
+			# quat_est_offset = qmult(qinverse(np.array(i.getEstQuat())), np.array([1,0,0,0]))
+			# quat_truth_offset = qmult(qinverse(np.array(i.getTruthQuat())), np.array([1,0,0,0]))
+			# rel_rot_mat = quat2mat(quat_rel)
 			x_est_offset = 0-xe
 			y_est_offset = 0-ye
 			z_est_offset = 0-ze
 			x_truth_offset = 0-xt
 			y_truth_offset = 0-yt
 			z_truth_offset = 0-zt
-			# roll_offset = roll_t - roll_e
-			# pitch_offset = pitch_t - roll_t
-			# yaw_offset = yaw_t - roll_t
 			counter += 1
-
-			i.pp()
 
 			#determine rotation matrix to apply
 			est_rot_mat = quat2mat(i.getEstQuat())
@@ -256,15 +253,33 @@ def main():
 		#first translate by some offset, then rotate into the truth coordinate frame
 		translated_xyz_est = np.array([xe+x_est_offset, ye+y_est_offset, ze+z_est_offset])
 		translated_xyz_truth = np.array([xt+x_truth_offset, yt+y_truth_offset, zt+z_truth_offset])
-		rotated_xyz_truth = np.dot(truth_rot_mat, translated_xyz_truth)
-		rel_rotated_xyz_est = rotate_vector(translated_xyz_est, quat_rel)
+		# rotated_xyz_truth = rotate_vector(translated_xyz_truth, quat_truth_offset)
+		# rotated_xyz_est = rotate_vector(translated_xyz_est, quat_est_offset)
+		# rel_rotated_xyz_est = rotate_vector(translated_xyz_est, quat_rel)
 
-		est_x.append(-rel_rotated_xyz_est[0])
-		est_y.append(rel_rotated_xyz_est[1])
-		est_z.append(-rel_rotated_xyz_est[2])
-		truth_x.append(translated_xyz_truth[0])
-		truth_y.append(translated_xyz_truth[1])
-		truth_z.append(translated_xyz_truth[2])
+		rot_est = np.dot(est_rot_mat, translated_xyz_est)
+		rot_truth = np.dot(truth_rot_mat, translated_xyz_truth)
+		est_x.append(-rot_est[0])
+		est_y.append(rot_est[1])
+		est_z.append(-rot_est[2])
+		truth_x.append(rot_truth[0])
+		truth_y.append(rot_truth[1])
+		truth_z.append(rot_truth[2])
+
+		# est_x.append(-rotated_xyz_est[0])
+		# est_y.append(rotated_xyz_est[1])
+		# est_z.append(-rotated_xyz_est[2])
+		# truth_x.append(rotated_xyz_truth[0])
+		# truth_y.append(rotated_xyz_truth[1])
+		# truth_z.append(rotated_xyz_truth[2])
+
+		# est_x.append(translated_xyz_est[0])
+		# est_y.append(translated_xyz_est[1])
+		# est_z.append(translated_xyz_est[2])
+		# truth_x.append(translated_xyz_truth[0])
+		# truth_y.append(translated_xyz_truth[1])
+		# truth_z.append(translated_xyz_truth[2])
+
 
 	#format the plot: truth is RED, estimated is GREEN
 	ax.set_xlabel('X')
