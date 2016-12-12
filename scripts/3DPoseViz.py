@@ -139,13 +139,39 @@ STAR2 = '/home/mknowles/bagfiles/star/star2_rovio.bag'
 # END BAGFILE DEFS #
 
 WORLD_FRAME_NAME = 'world'
-VICON_FRAME_NAME = 'vicon/firefly_sbx/firefly_sbx'
+VICON_FRAME_NAME = '/vicon/firefly_sbx/firefly_sbx'
 QUAD_FRAME_NAME = 'imu'
+
+
+def transformBLDToFLU(xyz_vector):
+	"""
+	Vicon and World frame are in Forward-Left-Up
+	STAR Imu is in Back-Left-Down
+	To transorm Rovio's Imu into the Vicon world frame, use rotation matrix
+	rot = [ [-1, 0, 0]
+			[0, 1, 0]
+			[0, 0, -1] ]
+	Note that this is equivalent to reversing the x-axis and z-axis
+	"""
+	rot = np.array([ [-1, 0, 0],
+					 [0, 1, 0],
+					 [0, 0, -1] ])
+	return np.dot(rot, xyz_vector)
+
+def transformURFToFLU(xyz_vector):
+	rot = np.array([ [0, 0, 1],
+					 [0, -1, 0],
+					 [1, 0, 0] ])
+	return np.dot(rot, xyz_vector)
+
+
+def transformViconTo():
+	pass
 
 def main():
 	#SETUP
-	BAGFILE = STAR1 #the full path to the bagfile
-	TRUTH_TF = '/vicon/tf' #the name of the truth transform topic
+	BAGFILE = EASY_RECORD_FILE #the full path to the bagfile
+	TRUTH_TF = VICON_FRAME_NAME #the name of the truth transform topic
 	EST_TF = '/rovio/transform' # the name of the estimated transform (odometry for rovio) topic
 	POSE_TOPIC = '/rovio/odometry'
 
@@ -177,17 +203,14 @@ def main():
 	for i in syncedPoses:
 		xt, yt, zt = i.getTruthXYZ()
 		xe, ye, ze = i.getEstXYZ()
+		xyz_est = np.array([xe,ye,ze])
+
+		est_in_vicon_cf = transformURFToFLU(xyz_est)
 
 		# roll_t, pitch_t, yaw_t = i.getTruthEulerAngles()
 		# roll_e, pitch_e, yaw_e = i.getEstEulerAngles()
 
 		if counter<1:
-			# calculate relative quaternion
-			# quat_rel = qmult(qinverse(np.array(i.getEstQuat())), np.array(i.getTruthQuat()))
-			# quat_est_offset = qmult(qinverse(np.array(i.getEstQuat())), np.array([1,0,0,0]))
-			# quat_truth_offset = qmult(qinverse(np.array(i.getTruthQuat())), np.array([1,0,0,0]))
-			# rel_rot_mat = quat2mat(quat_rel)
-
 			# NOTE: Rovio starts at (x0,y0,z0) = (0,0,0)
 			# determine how to translate the Vicon to (0,0,0) in the Rovio frame
 			x_truth_offset = 0-xt
@@ -197,19 +220,21 @@ def main():
 			i.pp()
 
 			#Rovio's quaternion should be the identity, but is not
-			# so I find the rotation matrices that transform Rovio to the vicon frame (vicon has the identity quaternion)
-			est_rot_mat = quat2mat(i.getEstQuat())
+			# so I find the rotation matrices that transform Rovio to the vicon CF
+			est_rot_mat = np.linalg.inv(quat2mat(i.getEstQuat()))
 
 		#translate the Vicon truth so that it begins at (0,0,0) in the Rovio frame
 		translated_xyz_truth = np.array([xt+x_truth_offset, yt+y_truth_offset, zt+z_truth_offset])
-		xyz_est = np.array([xe,ye,ze])
+		
 
 		# apply the rotation matrix for the estimates to the translated points
-		rot_est = np.dot(est_rot_mat, xyz_est)
+		est_corrected = np.dot(est_rot_mat, est_in_vicon_cf)
+		
 
-		est_x.append(-rot_est[0]) # sign change to deal with rovio vs. vicon frame conventions
-		est_y.append(rot_est[1])
-		est_z.append(-rot_est[2])
+
+		est_x.append(est_in_vicon_cf[0]) # sign change to deal with rovio vs. vicon frame conventions
+		est_y.append(est_in_vicon_cf[1])
+		est_z.append(est_in_vicon_cf[2])
 		truth_x.append(translated_xyz_truth[0])
 		truth_y.append(translated_xyz_truth[1])
 		truth_z.append(translated_xyz_truth[2])
