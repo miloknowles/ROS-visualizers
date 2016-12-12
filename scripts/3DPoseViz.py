@@ -15,7 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 #math modules
 import math
-from transforms3d.quaternions import rotate_vector, quat2mat, qinverse, qmult
+from transforms3d.quaternions import rotate_vector, quat2mat, qinverse, qmult, mat2quat
 from transforms3d.euler import quat2euler
 import numpy as np
 
@@ -162,11 +162,30 @@ def transformURFToFLU(xyz_vector):
 	rot = np.array([ [0, 0, 1],
 					 [0, -1, 0],
 					 [1, 0, 0] ])
+	return np.dot(rot,xyz_vector)
+
+def transformRovioImuToVicon(xyz_vector):
+	"""
+	Transforms the Rovio Imu world frame into the Vicon World frame
+	This is a 180 deg rotation around z-axis
+	"""
+	rot = np.array([ [-1, 0, 0],
+					 [0, -1, 0],
+					 [0, 0, 1]])
 	return np.dot(rot, xyz_vector)
 
-
-def transformViconTo():
-	pass
+def transformRovioQuaternionToViconCF(rovio_quat):
+	"""
+	Rotates a rovio imu quaternion (in imu world frame)
+	into the vicon world coordinate frame
+	"""
+	rot = np.array([ [0, 0, 1],
+					 [0, -1, 0],
+					 [1, 0, 0]])
+	rel_quat = mat2quat(rot)
+	new_quat = qmult(rovio_quat,rel_quat)
+	print "Eulers of imu in vicon world:", quat2euler(new_quat)
+	return new_quat
 
 def main():
 	#SETUP
@@ -205,10 +224,6 @@ def main():
 		xe, ye, ze = i.getEstXYZ()
 		xyz_est = np.array([xe,ye,ze])
 
-		est_in_vicon_cf = transformURFToFLU(xyz_est)
-
-		# roll_t, pitch_t, yaw_t = i.getTruthEulerAngles()
-		# roll_e, pitch_e, yaw_e = i.getEstEulerAngles()
 
 		if counter<1:
 			# NOTE: Rovio starts at (x0,y0,z0) = (0,0,0)
@@ -219,22 +234,25 @@ def main():
 			counter += 1
 			i.pp()
 
-			#Rovio's quaternion should be the identity, but is not
-			# so I find the rotation matrices that transform Rovio to the vicon CF
+			# figure out the slight offset rotation between Imu World and Vicon World
+			# transform imu0 quaternion reading back into imu world
+			#  then rotate that into vicon world
+			# the offset from the identity is the rotation offset
 			est_rot_mat = np.linalg.inv(quat2mat(i.getEstQuat()))
+			print "How to rotate imu back to world frame:", est_rot_mat
+			print "Rotation of imu in world frame:", quat2mat(i.getEstQuat())
+
+			print "Imu quaternion in vicon world:",transformRovioQuaternionToViconCF(i.getEstQuat())
 
 		#translate the Vicon truth so that it begins at (0,0,0) in the Rovio frame
 		translated_xyz_truth = np.array([xt+x_truth_offset, yt+y_truth_offset, zt+z_truth_offset])
-		
 
 		# apply the rotation matrix for the estimates to the translated points
-		est_corrected = np.dot(est_rot_mat, est_in_vicon_cf)
-		
+		imu_in_vicon = transformRovioImuToVicon(xyz_est)
 
-
-		est_x.append(est_in_vicon_cf[0]) # sign change to deal with rovio vs. vicon frame conventions
-		est_y.append(est_in_vicon_cf[1])
-		est_z.append(est_in_vicon_cf[2])
+		est_x.append(imu_in_vicon[0])
+		est_y.append(imu_in_vicon[1])
+		est_z.append(imu_in_vicon[2])
 		truth_x.append(translated_xyz_truth[0])
 		truth_y.append(translated_xyz_truth[1])
 		truth_z.append(translated_xyz_truth[2])
@@ -244,6 +262,9 @@ def main():
 	ax.set_xlabel('X')
 	ax.set_ylabel('Y')
 	ax.set_zlabel('Z')
+	ax.set_xlim([-5,5])
+	ax.set_ylim([-5,5])
+	ax.set_zlim([-5,5])
 	ax.set_title('Estimated Pose vs. Truth (meters)')
 	fig.add_axes(ax)
 	# print "TX:", np.shape(truth_x)
