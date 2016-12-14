@@ -16,7 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 #math modules
 import math
 from transforms3d.quaternions import rotate_vector, quat2mat, qinverse, qmult, mat2quat
-from transforms3d.euler import quat2euler
+from transforms3d.euler import quat2euler, euler2mat
 import numpy as np
 
 #message type for Vicon truth pose data, and the rovio estimated pose
@@ -45,7 +45,6 @@ class syncedPose(object):
 		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1e9
 		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1e9
 		self.syncedTime = (self.truthTime + self.estTime) / 2
-
 	def pp(self):
 		print("TruthXYZ:", self.getTruthXYZ())
 		print("EstXYZ:", self.getEstXYZ())
@@ -53,21 +52,6 @@ class syncedPose(object):
 		print("EstQuat:", self.getEstQuat())
 		print("Truth Euler:", self.getTruthEulerAngles())
 		print("Est Euler:", self.getEstEulerAngles())
-
-	def getEstTransform(self):
-		tfm = TransformStamped()
-		tfm.header = self.estTFMsg.header
-		tfm.child_frame_id = self.estTFMsg.child_frame_id
-		tfm.transform.translation.x, tfm.transform.translation.y, tfm.transform.translation.z = self.getEstXYZ()
-		tfm.transform.rotation.w, tfm.transform.rotation.x, tfm.transform.rotation.y, tfm.transform.rotation.z = self.getEstQuat()
-		return tfm
-
-	def getEstTF(self):
-		return self.estTFMsg
-
-	def getTruthTF(self):
-		return self.truthTFMsg
-
 	def getTruthQuat(self):
 		return (self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z)
 	def getEstQuat(self):
@@ -169,7 +153,7 @@ def transformRovioImuToVicon(xyz_vector):
 	Transforms the Rovio Imu world frame into the Vicon World frame
 	This is a 180 deg rotation around z-axis
 	"""
-	rot = np.array([ [-1, 0, 0],
+	rot = np.array([ [-1, 0, 0], 
 					 [0, -1, 0],
 					 [0, 0, 1]])
 	return np.dot(rot, xyz_vector)
@@ -180,16 +164,24 @@ def transformRovioQuaternionToViconCF(rovio_quat):
 	into the vicon world coordinate frame
 	"""
 	rot = np.array([ [0, 0, 1],
-					 [0, -1, 0],
-					 [1, 0, 0]])
+                     [0, 1, 0],
+                     [-1, 0,0]])
 	rel_quat = mat2quat(rot)
 	new_quat = qmult(rovio_quat,rel_quat)
-	print "Eulers of imu in vicon world:", quat2euler(new_quat)
+	#print "Eulers of imu in vicon world:", [math.degrees(i) for i in quat2euler(new_quat)]
 	return new_quat
+
+def getRelativeQuaternionAtoB(quat_a, quat_b):
+	"""
+	Given two quaternions A and B, determines the quaternion that rotates A to B
+	(Multiplying A by q_rel will give B)
+	"""
+	q_rel = qmult(qinverse(quat_a), quat_b)
+	return q_rel
 
 def main():
 	#SETUP
-	BAGFILE = EASY_RECORD_FILE #the full path to the bagfile
+	BAGFILE = DIFFICULT_RECORD_FILE #the full path to the bagfile
 	TRUTH_TF = VICON_FRAME_NAME #the name of the truth transform topic
 	EST_TF = '/rovio/transform' # the name of the estimated transform (odometry for rovio) topic
 	POSE_TOPIC = '/rovio/odometry'
@@ -228,27 +220,28 @@ def main():
 		if counter<1:
 			# NOTE: Rovio starts at (x0,y0,z0) = (0,0,0)
 			# determine how to translate the Vicon to (0,0,0) in the Rovio frame
-			x_truth_offset = 0-xt
-			y_truth_offset = 0-yt
-			z_truth_offset = 0-zt
+			x_truth_offset = xe-xt
+			y_truth_offset = ye-yt
+			z_truth_offset = ze-zt
 			counter += 1
-			i.pp()
-
-			# figure out the slight offset rotation between Imu World and Vicon World
-			# transform imu0 quaternion reading back into imu world
-			#  then rotate that into vicon world
-			# the offset from the identity is the rotation offset
-			est_rot_mat = np.linalg.inv(quat2mat(i.getEstQuat()))
-			print "How to rotate imu back to world frame:", est_rot_mat
-			print "Rotation of imu in world frame:", quat2mat(i.getEstQuat())
-
-			print "Imu quaternion in vicon world:",transformRovioQuaternionToViconCF(i.getEstQuat())
+			rovio_quat_in_vicon = transformRovioQuaternionToViconCF(i.getEstQuat())
+			#print "Rovio eulers in vicon:", [math.degrees(j) for j in quat2euler(rovio_quat_in_vicon, axes='sxyz')]
+			rovio_quat_offset_to_vicon = getRelativeQuaternionAtoB(rovio_quat_in_vicon, i.getTruthQuat())
+			rovio_euler_offset_to_vicon = [math.degrees(j) for j in quat2euler(rovio_quat_offset_to_vicon)]
+			yaw_offset = rovio_euler_offset_to_vicon[2]
+			print "Imu euler offset to vicon:", rovio_euler_offset_to_vicon
+			rovio_mat_offset_to_vicon = quat2mat(rovio_quat_offset_to_vicon)
 
 		#translate the Vicon truth so that it begins at (0,0,0) in the Rovio frame
 		translated_xyz_truth = np.array([xt+x_truth_offset, yt+y_truth_offset, zt+z_truth_offset])
 
-		# apply the rotation matrix for the estimates to the translated points
+		# apply the transformation from the Imu Frame to the Vicon World Frame
 		imu_in_vicon = transformRovioImuToVicon(xyz_est)
+
+		# apply a small extra rotation to correct for callibration differences between imu and vicon 
+		z_off = euler2mat(0,0,math.radians(yaw_offset))
+		#easyrecord z_off: 13.11163 yaw
+		imu_in_vicon_offset = np.dot(z_off, imu_in_vicon)
 
 		est_x.append(imu_in_vicon[0])
 		est_y.append(imu_in_vicon[1])
