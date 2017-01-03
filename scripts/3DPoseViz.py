@@ -228,7 +228,7 @@ def main():
 			#print "Rovio eulers in vicon:", [math.degrees(j) for j in quat2euler(rovio_quat_in_vicon, axes='sxyz')]
 			rovio_quat_offset_to_vicon = getRelativeQuaternionAtoB(rovio_quat_in_vicon, i.getTruthQuat())
 			rovio_euler_offset_to_vicon = [math.degrees(j) for j in quat2euler(rovio_quat_offset_to_vicon)]
-			yaw_offset = rovio_euler_offset_to_vicon[2]
+			yaw_offset = rovio_euler_offset_to_vicon[2]+2
 			print "Imu euler offset to vicon:", rovio_euler_offset_to_vicon
 			rovio_mat_offset_to_vicon = quat2mat(rovio_quat_offset_to_vicon)
 
@@ -243,9 +243,9 @@ def main():
 		#easyrecord z_off: 13.11163 yaw
 		imu_in_vicon_offset = np.dot(z_off, imu_in_vicon)
 
-		est_x.append(imu_in_vicon[0])
-		est_y.append(imu_in_vicon[1])
-		est_z.append(imu_in_vicon[2])
+		est_x.append(imu_in_vicon_offset[0])
+		est_y.append(imu_in_vicon_offset[1])
+		est_z.append(imu_in_vicon_offset[2])
 		truth_x.append(translated_xyz_truth[0])
 		truth_y.append(translated_xyz_truth[1])
 		truth_z.append(translated_xyz_truth[2])
@@ -255,10 +255,10 @@ def main():
 	ax.set_xlabel('X')
 	ax.set_ylabel('Y')
 	ax.set_zlabel('Z')
-	ax.set_xlim([-5,5])
-	ax.set_ylim([-5,5])
-	ax.set_zlim([-5,5])
-	ax.set_title('Estimated Pose vs. Truth (meters)')
+	ax.set_xlim([-3,1])
+	ax.set_ylim([-3,1])
+	ax.set_zlim([-2,2])
+	ax.set_title('EUROC3: Estimated Pose vs. Truth (meters)')
 	fig.add_axes(ax)
 	# print "TX:", np.shape(truth_x)
 	# print "TY:", np.shape(truth_y)
