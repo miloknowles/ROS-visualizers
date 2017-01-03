@@ -45,33 +45,61 @@ def areSynchronized(msg1, msg2, epsilon):
 	else:
 		return False
 
-
 class syncedPose(object):
-	def __init__(self, truthTFMsg, estTFMsg):
+	def __init__(self, truthTFMsg, estPoseMsg):
 		self.truthTFMsg = truthTFMsg
-		self.estTFMsg = estTFMsg
+		self.estTFMsg = estPoseMsg #note: estTFMsg is of type nav_msgs/Odometry
 		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1e9
 		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1e9
 		self.syncedTime = (self.truthTime + self.estTime) / 2
-
+	def pp(self):
+		print("TruthXYZ:", self.getTruthXYZ())
+		print("EstXYZ:", self.getEstXYZ())
+		print("TruthQuat:", self.getTruthQuat())
+		print("EstQuat:", self.getEstQuat())
+		print("Truth Euler:", self.getTruthEulerAngles())
+		print("Est Euler:", self.getEstEulerAngles())
+	def getTruthQuat(self):
+		return (self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z)
+	def getEstQuat(self):
+		return (self.estTFMsg.pose.pose.orientation.w, self.estTFMsg.pose.pose.orientation.x, self.estTFMsg.pose.pose.orientation.y, self.estTFMsg.pose.pose.orientation.z)
 	def getTruthXYZ(self):
 		return (self.truthTFMsg.transform.translation.x, self.truthTFMsg.transform.translation.y, self.truthTFMsg.transform.translation.z)
-
 	def getEstXYZ(self):
-		return (self.estTFMsg.transform.translation.x, self.estTFMsg.transform.translation.y, self.estTFMsg.transform.translation.z)
-
+		return (self.estTFMsg.pose.pose.position.x, self.estTFMsg.pose.pose.position.y, self.estTFMsg.pose.pose.position.z)
 	def getTruthEulerAngles(self):
-		roll,pitch,yaw = quat2euler((self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z))
-		return (math.degrees(roll),math.degrees(pitch),math.degrees(yaw))
+		return [math.degrees(i) for i in quat2euler((self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z))]
 	def getEstEulerAngles(self):
-		roll, pitch, yaw = quat2euler((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
-		return (math.degrees(roll),math.degrees(pitch),math.degrees(yaw))
-
+		return [math.degrees(i) for i in quat2euler((self.estTFMsg.pose.pose.orientation.w, self.estTFMsg.pose.pose.orientation.x, self.estTFMsg.pose.pose.orientation.y, self.estTFMsg.pose.pose.orientation.z))]
 	def getSyncedTime(self):
 		return self.syncedTime
 
-	def getEstRotationMatrix(self):
-		return quat2mat((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
+# class syncedPose(object):
+# 	def __init__(self, truthTFMsg, estTFMsg):
+# 		self.truthTFMsg = truthTFMsg
+# 		self.estTFMsg = estTFMsg
+# 		self.truthTime = float(self.truthTFMsg.header.stamp.secs) + float(self.truthTFMsg.header.stamp.nsecs) / 1e9
+# 		self.estTime = float(self.estTFMsg.header.stamp.secs) + float(self.estTFMsg.header.stamp.nsecs) / 1e9
+# 		self.syncedTime = (self.truthTime + self.estTime) / 2
+
+# 	def getTruthXYZ(self):
+# 		return (self.truthTFMsg.transform.translation.x, self.truthTFMsg.transform.translation.y, self.truthTFMsg.transform.translation.z)
+
+# 	def getEstXYZ(self):
+# 		return (self.estTFMsg.transform.translation.x, self.estTFMsg.transform.translation.y, self.estTFMsg.transform.translation.z)
+
+# 	def getTruthEulerAngles(self):
+# 		roll,pitch,yaw = quat2euler((self.truthTFMsg.transform.rotation.w, self.truthTFMsg.transform.rotation.x, self.truthTFMsg.transform.rotation.y, self.truthTFMsg.transform.rotation.z))
+# 		return (math.degrees(roll),math.degrees(pitch),math.degrees(yaw))
+# 	def getEstEulerAngles(self):
+# 		roll, pitch, yaw = quat2euler((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
+# 		return (math.degrees(roll),math.degrees(pitch),math.degrees(yaw))
+
+# 	def getSyncedTime(self):
+# 		return self.syncedTime
+
+# 	def getEstRotationMatrix(self):
+# 		return quat2mat((self.estTFMsg.transform.rotation.w, self.estTFMsg.transform.rotation.x, self.estTFMsg.transform.rotation.y, self.estTFMsg.transform.rotation.z))
 
 def removeDiscontinuitiesFromRotation(rotationArray):
 	"""
@@ -93,7 +121,7 @@ def removeDiscontinuitiesFromRotation(rotationArray):
 		rotationArray[i] += offset
 	return rotationArray
 
-def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
+def buildSyncedPoseList(bagfile, epsilon, truth_topic, est_topic, pose_topic):
 	"""
 	Bagfile: the full path to the .bag file that contains truth/est transforms
 	epsilon: the value (nanosecs) that two msg stamps must be within to be considered simultaneous
@@ -107,8 +135,9 @@ def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
 	syncedPoses = []
 
 	#topic, message data object, time
-	for topic, msg, t in bag.read_messages(topics=[truth_tf, est_tf]):
-		
+	counter = 0
+	for topic, msg, t in bag.read_messages(topics=[truth_topic, pose_topic]):
+
 		#see if we're already holding a msg to find a match
 		if holdMsg == None:
 			holdMsg = msg
@@ -119,10 +148,9 @@ def buildSyncedPoseList(bagfile, epsilon, truth_tf, est_tf):
 
 			#check if the matching msg we just found is within epsilon nanosecs of our hold topic
 			if areSynchronized(holdMsg, msg, epsilon):
-
 				#check whether the holdTopic is truth or estimated
 				# add the syncedPose object to a chronological list
-				if holdTopic == truth_tf:
+				if holdTopic == truth_topic:
 					syncedPoses.append(syncedPose(holdMsg, msg))
 				else:
 					syncedPoses.append(syncedPose(msg, holdMsg))
@@ -343,13 +371,26 @@ def plotEstimationVSTruth(syncedPoses, x=1,y=1,z=1,roll=True,pitch=True,yaw=True
 	plt.show()
 
 
+# BAGFILES TO ANALYZE #
+# 1. euroc dataset (provided by ethz-asl)
+EASY_RECORD_FILE = '/home/mknowles/bagfiles/euroc/easy_record.bag'
+MEDIUM_RECORD_FILE = '/home/mknowles/bagfiles/euroc/medium_record.bag'
+DIFFICULT_RECORD_FILE = '/home/mknowles/bagfiles/euroc/difficult_record.bag'
+# 2. Kyel's STAR dataset
+STAR0 = '/home/mknowles/bagfiles/star/star0_rovio.bag'
+STAR1 = '/home/mknowles/bagfiles/star/star1_rovio.bag'
+STAR2 = '/home/mknowles/bagfiles/star/star2_rovio.bag'
+# END BAGFILE DEFS #
+VICON_FRAME_NAME = '/vicon/firefly_sbx/firefly_sbx'
+
 def main():
-	BAGFILE = '/home/mknowles/bagfiles/star/star0_rovio.bag'
-	TRUTH_TF = '/vicon/tf'
+	BAGFILE = EASY_RECORD_FILE
+	TRUTH_TF = VICON_FRAME_NAME
 	EST_TF = '/rovio/transform'
+	POSE_TOPIC = '/rovio/odometry'
 
 	#get a chronological list of synced poses from the bag
-	syncedPoses = buildSyncedPoseList(BAGFILE, 1e7, TRUTH_TF, EST_TF)
+	syncedPoses = buildSyncedPoseList(BAGFILE, 1e7, TRUTH_TF, EST_TF, POSE_TOPIC)
 	print("Created", len(syncedPoses), "synced poses.")
 
 	#display the right plots
