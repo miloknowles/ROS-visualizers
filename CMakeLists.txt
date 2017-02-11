@@ -147,6 +147,8 @@ install(PROGRAMS
    #scripts/pose_truth.py
    scripts/3DPoseViz.py
    scripts/PositionOrientationError.py
+   scripts/3DPoseVizSTAR.py
+   scripts/viconTFPublisher.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 ## Mark executables and/or libraries for installation

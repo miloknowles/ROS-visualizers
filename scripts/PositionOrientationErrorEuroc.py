@@ -216,6 +216,7 @@ def main():
 		xe, ye, ze = i.getEstXYZ()
 		xyz_est = np.array([xe,ye,ze])
 
+
 		if counter<1:
 			# NOTE: Rovio starts at (x0,y0,z0) = (0,0,0)
 			# determine how to translate the Vicon to (0,0,0) in the Rovio frame
